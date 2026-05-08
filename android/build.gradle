@@ -1,0 +1,72 @@
+group = "io.issuetracker.issuetracker_sdk"
+version = "0.1.0"
+
+buildscript {
+    ext.kotlin_version = "2.0.21"
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.7.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        // For local dev; the consuming app must do the same.
+        mavenLocal()
+    }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+android {
+    namespace = "io.issuetracker.issuetracker_sdk"
+
+    compileSdk = 36
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_11
+    }
+
+    sourceSets {
+        main.java.srcDirs += "src/main/kotlin"
+        test.java.srcDirs += "src/test/kotlin"
+    }
+
+    defaultConfig {
+        // Native Android SDK requires API 26+, so the wrapper does too.
+        minSdk = 26
+    }
+
+    dependencies {
+        // Native Android SDK that this wrapper bridges to.
+        // For local dev: cd ../../sdk-android && ./gradlew :sdk:publishToMavenLocal
+        implementation("io.issuetracker:sdk:0.1.0-SNAPSHOT")
+
+        testImplementation("org.jetbrains.kotlin:kotlin-test")
+        testImplementation("org.mockito:mockito-core:5.0.0")
+    }
+
+    testOptions {
+        unitTests.all {
+            useJUnitPlatform()
+            testLogging {
+                events "passed", "skipped", "failed", "standardOut", "standardError"
+                outputs.upToDateWhen { false }
+                showStandardStreams = true
+            }
+        }
+    }
+}

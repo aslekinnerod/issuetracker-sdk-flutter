@@ -1,0 +1,28 @@
+name: issuetracker_sdk
+description: "Drop-in issue reporter SDK for Flutter apps. Wraps the native iOS + Android Issuetracker SDKs."
+version: 0.1.0
+homepage: https://issuetracker.no
+repository: https://github.com/aslekinnerod/issuetracker-sdk-flutter
+
+environment:
+  sdk: ^3.7.2
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  plugin_platform_interface: ^2.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: io.issuetracker.issuetracker_sdk
+        pluginClass: IssuetrackerSdkPlugin
+      ios:
+        pluginClass: IssuetrackerSdkPlugin
