@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'issuetracker_sdk.dart';
 import 'issuetracker_sdk_platform_interface.dart';
 
 /// MethodChannel implementation. The channel name `issuetracker_sdk`
@@ -8,6 +9,27 @@ import 'issuetracker_sdk_platform_interface.dart';
 class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
   @visibleForTesting
   final methodChannel = const MethodChannel('issuetracker_sdk');
+
+  // EventChannel for ADR-0003 Decision 9 onConfigurationError forwarding.
+  // Native side sends the SdkErrorReason rawValue as a String when the
+  // underlying SDK transitions to TERMINATED.
+  @visibleForTesting
+  final eventChannel =
+      const EventChannel('issuetracker_sdk/configuration_error');
+
+  Stream<SdkErrorReason>? _configurationErrorEvents;
+
+  @override
+  Stream<SdkErrorReason> get configurationErrorEvents {
+    return _configurationErrorEvents ??= eventChannel
+        .receiveBroadcastStream()
+        .map<SdkErrorReason?>((dynamic raw) {
+          if (raw is String) return SdkErrorReason.fromRawValue(raw);
+          return null;
+        })
+        .where((r) => r != null)
+        .cast<SdkErrorReason>();
+  }
 
   @override
   Future<void> configure({
