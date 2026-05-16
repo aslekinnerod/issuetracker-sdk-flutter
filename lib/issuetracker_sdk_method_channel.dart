@@ -12,14 +12,12 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
   @override
   Future<void> configure({
     required String apiKey,
-    required String endpoint,
     required bool shakeToReport,
     required bool longPressToReport,
     required bool enableCrashReporting,
   }) async {
     await methodChannel.invokeMethod<void>('configure', <String, dynamic>{
       'apiKey': apiKey,
-      'endpoint': endpoint,
       'shakeToReport': shakeToReport,
       'longPressToReport': longPressToReport,
       'enableCrashReporting': enableCrashReporting,

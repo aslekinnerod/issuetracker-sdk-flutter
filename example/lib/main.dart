@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:issuetracker_sdk/issuetracker_sdk.dart';
 
-const String _apiKey = 'it_replace_with_real_key_from_admin_ui';
-const String _endpoint = 'https://issuetracker-api-staging.web.app/v1';
+const String _apiKey = 'it_staging_replace_with_real_key_from_admin_ui';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  Issuetracker.configure(apiKey: _apiKey, endpoint: _endpoint);
+  Issuetracker.configure(apiKey: _apiKey);
   runApp(const SampleApp());
 }
 

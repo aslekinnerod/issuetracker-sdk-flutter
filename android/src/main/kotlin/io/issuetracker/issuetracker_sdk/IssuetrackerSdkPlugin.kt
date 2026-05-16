@@ -23,9 +23,8 @@ class IssuetrackerSdkPlugin : FlutterPlugin, MethodCallHandler {
             "configure" -> {
                 val app = application
                 val apiKey = call.argument<String>("apiKey")
-                val endpoint = call.argument<String>("endpoint")
-                if (app == null || apiKey == null || endpoint == null) {
-                    result.error("invalid-arguments", "configure requires apiKey + endpoint", null)
+                if (app == null || apiKey == null) {
+                    result.error("invalid-arguments", "configure requires apiKey", null)
                     return
                 }
                 val shake = call.argument<Boolean>("shakeToReport") ?: true
@@ -34,7 +33,6 @@ class IssuetrackerSdkPlugin : FlutterPlugin, MethodCallHandler {
                 Issuetracker.configure(
                     application = app,
                     apiKey = apiKey,
-                    endpoint = endpoint,
                     shakeToReport = shake,
                     longPressToReport = longPress,
                     enableCrashReporting = crash,

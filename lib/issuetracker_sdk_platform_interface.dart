@@ -18,7 +18,6 @@ abstract class IssuetrackerSdkPlatform extends PlatformInterface {
 
   Future<void> configure({
     required String apiKey,
-    required String endpoint,
     required bool shakeToReport,
     required bool longPressToReport,
     required bool enableCrashReporting,

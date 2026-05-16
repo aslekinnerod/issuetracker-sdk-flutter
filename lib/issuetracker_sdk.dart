@@ -20,17 +20,17 @@ class Issuetracker {
   Issuetracker._();
 
   /// Call once at app start (typically from `main()` after
-  /// `WidgetsFlutterBinding.ensureInitialized()`).
+  /// `WidgetsFlutterBinding.ensureInitialized()`). Environment
+  /// (production vs. staging) is derived from the key prefix —
+  /// there is no endpoint to configure.
   static Future<void> configure({
     required String apiKey,
-    required String endpoint,
     bool shakeToReport = true,
     bool longPressToReport = true,
     bool enableCrashReporting = true,
   }) {
     return IssuetrackerSdkPlatform.instance.configure(
       apiKey: apiKey,
-      endpoint: endpoint,
       shakeToReport: shakeToReport,
       longPressToReport: longPressToReport,
       enableCrashReporting: enableCrashReporting,

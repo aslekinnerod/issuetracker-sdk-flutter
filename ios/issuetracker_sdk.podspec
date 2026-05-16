@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'issuetracker_sdk'
-  s.version          = '0.1.0'
+  s.version          = '0.4.0'
   s.summary          = 'Drop-in issue reporter SDK for Flutter apps.'
   s.description      = <<-DESC
 Drop-in issue reporter for Flutter apps. Bridges to the native
@@ -17,7 +17,7 @@ annotation, breadcrumbs, crash detection.
   # Native iOS SDK that this wrapper bridges to. The example app's
   # Podfile pins it to a local path during development:
   #   pod 'IssuetrackerSDK', :path => '../../../sdk-ios'
-  s.dependency 'IssuetrackerSDK', '~> 0.1.0'
+  s.dependency 'IssuetrackerSDK', '~> 0.4'
 
   s.platform = :ios, '16.0'
   s.pod_target_xcconfig = {

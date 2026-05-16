@@ -16,14 +16,10 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin {
         switch call.method {
         case "configure":
             let args = call.arguments as? [String: Any] ?? [:]
-            guard
-                let apiKey = args["apiKey"] as? String,
-                let endpoint = args["endpoint"] as? String,
-                let url = URL(string: endpoint)
-            else {
+            guard let apiKey = args["apiKey"] as? String else {
                 result(FlutterError(
                     code: "invalid-arguments",
-                    message: "configure requires apiKey + endpoint",
+                    message: "configure requires apiKey",
                     details: nil,
                 ))
                 return
@@ -34,7 +30,6 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin {
             DispatchQueue.main.async {
                 Issuetracker.configure(
                     apiKey: apiKey,
-                    endpoint: url,
                     shakeToReport: shake,
                     longPressToReport: longPress,
                     enableCrashReporting: crash,
