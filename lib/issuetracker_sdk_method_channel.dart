@@ -38,6 +38,7 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
     required bool longPressToReport,
     required bool enableCrashReporting,
     required bool showOnboarding,
+    TerminatedUiStrings? terminatedUI,
   }) async {
     await methodChannel.invokeMethod<void>('configure', <String, dynamic>{
       'apiKey': apiKey,
@@ -45,6 +46,16 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
       'longPressToReport': longPressToReport,
       'enableCrashReporting': enableCrashReporting,
       'showOnboarding': showOnboarding,
+      // Send the three string fields as a nested map. Native side
+      // reads each by key and falls back to its own English default
+      // when missing. ADR-0003 Decision 9.
+      'terminatedUI': terminatedUI == null
+          ? null
+          : <String, String?>{
+              'title': terminatedUI.title,
+              'subtitle': terminatedUI.subtitle,
+              'closeLabel': terminatedUI.closeLabel,
+            },
     });
   }
 

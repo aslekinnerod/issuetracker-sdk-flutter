@@ -10,6 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import no.issuetracker.sdk.Issuetracker
+import no.issuetracker.sdk.TerminatedUiStrings
 
 class IssuetrackerSdkPlugin :
     FlutterPlugin,
@@ -58,6 +59,16 @@ class IssuetrackerSdkPlugin :
                 val longPress = call.argument<Boolean>("longPressToReport") ?: true
                 val crash = call.argument<Boolean>("enableCrashReporting") ?: true
                 val onboarding = call.argument<Boolean>("showOnboarding") ?: false
+                // Parse the nested map the Dart layer sends. A null map
+                // means "use the SDK's built-in English defaults" — same
+                // contract as on iOS and web. ADR-0003 Decision 9.
+                val terminatedUI: TerminatedUiStrings? = call.argument<Map<String, Any?>>("terminatedUI")?.let { dict ->
+                    val title = dict["title"] as? String
+                    val subtitle = dict["subtitle"] as? String
+                    val closeLabel = dict["closeLabel"] as? String
+                    if (title == null && subtitle == null && closeLabel == null) null
+                    else TerminatedUiStrings(title = title, subtitle = subtitle, closeLabel = closeLabel)
+                }
                 Issuetracker.configure(
                     application = app,
                     apiKey = apiKey,
@@ -73,6 +84,7 @@ class IssuetrackerSdkPlugin :
                         }
                     },
                     showOnboarding = onboarding,
+                    terminatedUI = terminatedUI,
                 )
                 result.success(null)
             }

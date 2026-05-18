@@ -53,6 +53,17 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
             let longPress = args["longPressToReport"] as? Bool ?? true
             let crash = args["enableCrashReporting"] as? Bool ?? true
             let onboarding = args["showOnboarding"] as? Bool ?? false
+            // Build the optional TerminatedUiStrings from the nested
+            // map the Dart layer sends. nil map = native English
+            // defaults stay. ADR-0003 Decision 9.
+            let terminatedUI: TerminatedUiStrings? = {
+                guard let dict = args["terminatedUI"] as? [String: Any] else { return nil }
+                let title = dict["title"] as? String
+                let subtitle = dict["subtitle"] as? String
+                let closeLabel = dict["closeLabel"] as? String
+                if title == nil && subtitle == nil && closeLabel == nil { return nil }
+                return TerminatedUiStrings(title: title, subtitle: subtitle, closeLabel: closeLabel)
+            }()
             DispatchQueue.main.async { [weak self] in
                 Issuetracker.configure(
                     apiKey: apiKey,
@@ -67,6 +78,7 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
                         }
                     },
                     showOnboarding: onboarding,
+                    terminatedUI: terminatedUI,
                 )
                 result(nil)
             }

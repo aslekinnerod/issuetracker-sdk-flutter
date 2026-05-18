@@ -23,6 +23,7 @@ abstract class IssuetrackerSdkPlatform extends PlatformInterface {
     required bool longPressToReport,
     required bool enableCrashReporting,
     required bool showOnboarding,
+    TerminatedUiStrings? terminatedUI,
   }) {
     throw UnimplementedError('configure() has not been implemented.');
   }

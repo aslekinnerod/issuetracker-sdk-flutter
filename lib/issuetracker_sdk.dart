@@ -49,6 +49,27 @@ enum SdkErrorReason {
   }
 }
 
+/// Strings shown when the underlying native SDK has been terminated
+/// and a test-cohort user opens the reporting surface. ADR-0003
+/// Decision 9 mandates a localised terminal message; English is the
+/// built-in default on the native side, and host apps may inject
+/// translations via [Issuetracker.configure].
+///
+/// Each field is optional — fields the host doesn't override fall
+/// back to English. A missing instance falls back to all-English.
+class TerminatedUiStrings {
+  /// Big headline. Default: `"Bug reporting is no longer available."`
+  final String? title;
+
+  /// One-line follow-up. Default: `"Contact your team."`
+  final String? subtitle;
+
+  /// Close-button label. Default: `"Close"`.
+  final String? closeLabel;
+
+  const TerminatedUiStrings({this.title, this.subtitle, this.closeLabel});
+}
+
 /// Public facade for the Issuetracker Flutter SDK. Wraps the native
 /// iOS + Android Issuetracker SDKs — UI, screenshot capture, shake
 /// detection, and crash reporting all run on the native side.
@@ -86,6 +107,7 @@ class Issuetracker {
     bool enableCrashReporting = true,
     void Function(SdkErrorReason reason)? onConfigurationError,
     bool showOnboarding = false,
+    TerminatedUiStrings? terminatedUI,
   }) async {
     // Tear down any prior subscription so a re-configure() with a
     // different callback doesn't end up firing both. Subsequent
@@ -105,6 +127,7 @@ class Issuetracker {
       longPressToReport: longPressToReport,
       enableCrashReporting: enableCrashReporting,
       showOnboarding: showOnboarding,
+      terminatedUI: terminatedUI,
     );
   }
 
