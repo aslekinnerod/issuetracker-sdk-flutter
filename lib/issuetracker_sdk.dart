@@ -70,12 +70,22 @@ class Issuetracker {
   /// the SDK will not call the report endpoint again for the lifetime
   /// of this install — recovery requires a fresh [configure] call.
   /// See ADR-0003 Decision 9.
+  ///
+  /// If [showOnboarding] is `true`, presents a one-time popover on
+  /// first launch teaching the user which gestures trigger the
+  /// reporter — only the gestures currently enabled are shown.
+  /// Persisted per install by the underlying native iOS / Android
+  /// SDKs, so the popover never appears twice unless [showOnboarding]
+  /// (the method) is called explicitly. With both [shakeToReport] and
+  /// [longPressToReport] disabled the popover is silently skipped.
+  /// Defaults to `false`.
   static Future<void> configure({
     required String apiKey,
     bool shakeToReport = true,
     bool longPressToReport = true,
     bool enableCrashReporting = true,
     void Function(SdkErrorReason reason)? onConfigurationError,
+    bool showOnboarding = false,
   }) async {
     // Tear down any prior subscription so a re-configure() with a
     // different callback doesn't end up firing both. Subsequent
@@ -94,11 +104,19 @@ class Issuetracker {
       shakeToReport: shakeToReport,
       longPressToReport: longPressToReport,
       enableCrashReporting: enableCrashReporting,
+      showOnboarding: showOnboarding,
     );
   }
 
   /// Programmatic trigger — for an in-app "Report a bug" button.
   static Future<void> report() => IssuetrackerSdkPlatform.instance.report();
+
+  /// Re-presents the onboarding popover regardless of whether it has
+  /// been shown before on this install. Intended for a "Show
+  /// introduction again"-style entry in the host app's settings.
+  /// No-op if no gestures are enabled.
+  static Future<void> showOnboarding() =>
+      IssuetrackerSdkPlatform.instance.showOnboarding();
 
   /// Skip the "What should we call you?" prompt.
   static Future<void> identify(String name) =>

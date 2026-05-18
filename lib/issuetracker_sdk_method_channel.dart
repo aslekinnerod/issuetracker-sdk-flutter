@@ -37,18 +37,25 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
     required bool shakeToReport,
     required bool longPressToReport,
     required bool enableCrashReporting,
+    required bool showOnboarding,
   }) async {
     await methodChannel.invokeMethod<void>('configure', <String, dynamic>{
       'apiKey': apiKey,
       'shakeToReport': shakeToReport,
       'longPressToReport': longPressToReport,
       'enableCrashReporting': enableCrashReporting,
+      'showOnboarding': showOnboarding,
     });
   }
 
   @override
   Future<void> report() async {
     await methodChannel.invokeMethod<void>('report');
+  }
+
+  @override
+  Future<void> showOnboarding() async {
+    await methodChannel.invokeMethod<void>('showOnboarding');
   }
 
   @override

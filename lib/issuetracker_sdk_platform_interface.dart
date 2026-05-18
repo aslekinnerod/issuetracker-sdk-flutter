@@ -22,8 +22,13 @@ abstract class IssuetrackerSdkPlatform extends PlatformInterface {
     required bool shakeToReport,
     required bool longPressToReport,
     required bool enableCrashReporting,
+    required bool showOnboarding,
   }) {
     throw UnimplementedError('configure() has not been implemented.');
+  }
+
+  Future<void> showOnboarding() {
+    throw UnimplementedError('showOnboarding() has not been implemented.');
   }
 
   /// Stream of TERMINATED-transition events from the native SDK.

@@ -52,6 +52,7 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
             let shake = args["shakeToReport"] as? Bool ?? true
             let longPress = args["longPressToReport"] as? Bool ?? true
             let crash = args["enableCrashReporting"] as? Bool ?? true
+            let onboarding = args["showOnboarding"] as? Bool ?? false
             DispatchQueue.main.async { [weak self] in
                 Issuetracker.configure(
                     apiKey: apiKey,
@@ -65,6 +66,7 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
                             self?.configurationErrorSink?(reason.rawValue)
                         }
                     },
+                    showOnboarding: onboarding,
                 )
                 result(nil)
             }
@@ -72,6 +74,12 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
         case "report":
             DispatchQueue.main.async {
                 Issuetracker.report()
+                result(nil)
+            }
+
+        case "showOnboarding":
+            DispatchQueue.main.async {
+                Issuetracker.showOnboarding()
                 result(nil)
             }
 

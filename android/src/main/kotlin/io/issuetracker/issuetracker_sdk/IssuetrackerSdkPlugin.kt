@@ -57,6 +57,7 @@ class IssuetrackerSdkPlugin :
                 val shake = call.argument<Boolean>("shakeToReport") ?: true
                 val longPress = call.argument<Boolean>("longPressToReport") ?: true
                 val crash = call.argument<Boolean>("enableCrashReporting") ?: true
+                val onboarding = call.argument<Boolean>("showOnboarding") ?: false
                 Issuetracker.configure(
                     application = app,
                     apiKey = apiKey,
@@ -71,12 +72,18 @@ class IssuetrackerSdkPlugin :
                             mainHandler.post { sink.success(reason.rawValue) }
                         }
                     },
+                    showOnboarding = onboarding,
                 )
                 result.success(null)
             }
 
             "report" -> {
                 Issuetracker.report()
+                result.success(null)
+            }
+
+            "showOnboarding" -> {
+                Issuetracker.showOnboarding()
                 result.success(null)
             }
 
