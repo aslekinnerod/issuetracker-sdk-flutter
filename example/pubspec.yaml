@@ -29,6 +29,13 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Tiny key/value store for sample-app state — the last
+  # onConfigurationError reason we want to display, and the i18n
+  # toggle for TerminatedUiStrings (which must be wired at
+  # configure() time, before the first frame, so persistence is
+  # required to survive the relaunch the toggle asks for).
+  shared_preferences: ^2.3.0
+
 dev_dependencies:
   integration_test:
     sdk: flutter
