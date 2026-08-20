@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:issuetracker_sdk/issuetracker_sdk.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,6 +21,18 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
 
   final useNorwegian = prefs.getBool(_prefUseNorwegianTerminatedUI) ?? false;
+  await configureSdk(prefs, useNorwegian: useNorwegian);
+
+  runApp(SampleApp(prefs: prefs));
+}
+
+/// Shared by [main] and the TERMINATED-UI i18n toggle: the SDK
+/// accepts repeated [Issuetracker.configure] calls, so a new
+/// `terminatedUI` applies immediately without an app restart.
+Future<void> configureSdk(
+  SharedPreferences prefs, {
+  required bool useNorwegian,
+}) async {
   final terminatedUI = useNorwegian
       ? const TerminatedUiStrings(
           title: 'Feilrapportering er ikke lenger tilgjengelig.',
@@ -32,6 +45,11 @@ Future<void> main() async {
     apiKey: _apiKey,
     shakeToReport: true,
     longPressToReport: true,
+    // ADR-0008: the one-line accessibility path — a screen-reader
+    // custom action plus an SDK-provided floating report button
+    // (takes effect once the native SDKs ship the flags).
+    accessibilityAction: true,
+    showReportButton: true,
     enableCrashReporting: true,
     showOnboarding: true,
     onConfigurationError: (SdkErrorReason reason) {
@@ -39,11 +57,13 @@ Future<void> main() async {
       // SDK has already transitioned to TERMINATED by this point.
       prefs.setString(_prefLastConfigError, reason.rawValue);
       prefs.setInt(_prefLastConfigErrorAt, DateTime.now().millisecondsSinceEpoch);
+      SemanticsService.announce(
+        'Configuration error: ${reason.rawValue}',
+        TextDirection.ltr,
+      );
     },
     terminatedUI: terminatedUI,
   );
-
-  runApp(SampleApp(prefs: prefs));
 }
 
 class SampleApp extends StatelessWidget {
@@ -142,12 +162,15 @@ class _SampleScreenState extends State<SampleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              title.toUpperCase(),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
+            Semantics(
+              header: true,
+              child: Text(
+                title.toUpperCase(),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
             ),
             if (subtitle != null) ...[
               const SizedBox(height: 4),
@@ -231,6 +254,10 @@ class _SampleScreenState extends State<SampleScreen> {
                     if (v.isNotEmpty) {
                       await Issuetracker.identify(v);
                       setState(() => _identityFeedback = 'Saved "$v"');
+                      SemanticsService.announce(
+                        'Saved "$v"',
+                        TextDirection.ltr,
+                      );
                     }
                   },
                   child: const Text('Save'),
@@ -243,6 +270,10 @@ class _SampleScreenState extends State<SampleScreen> {
                     await Issuetracker.clearIdentity();
                     _nameCtl.clear();
                     setState(() => _identityFeedback = 'Cleared.');
+                    SemanticsService.announce(
+                      'Identity cleared.',
+                      TextDirection.ltr,
+                    );
                   },
                   child: const Text('Clear'),
                 ),
@@ -282,6 +313,10 @@ class _SampleScreenState extends State<SampleScreen> {
                         _recentBreadcrumbs.removeAt(0);
                       }
                     });
+                    SemanticsService.announce(
+                      'Recorded viewed_home',
+                      TextDirection.ltr,
+                    );
                   },
                   child: const Text('viewed_home'),
                 ),
@@ -300,6 +335,10 @@ class _SampleScreenState extends State<SampleScreen> {
                         _recentBreadcrumbs.removeAt(0);
                       }
                     });
+                    SemanticsService.announce(
+                      'Recorded tapped_button',
+                      TextDirection.ltr,
+                    );
                   },
                   child: const Text('tapped_button'),
                 ),
@@ -338,19 +377,16 @@ class _SampleScreenState extends State<SampleScreen> {
     return _sectionCard(
       title: 'TERMINATED-UI i18n',
       subtitle:
-          'When ON, the SDK shows the terminal screen in Norwegian. Restart the app to apply.',
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text('Norwegian strings'),
-          Switch(
-            value: _useNorwegian,
-            onChanged: (v) async {
-              await widget.prefs.setBool(_prefUseNorwegianTerminatedUI, v);
-              setState(() => _useNorwegian = v);
-            },
-          ),
-        ],
+          'When ON, the SDK shows the terminal screen in Norwegian. Applied immediately — no restart needed (the SDK accepts a new terminatedUI on every configure() call).',
+      child: SwitchListTile(
+        title: const Text('Norwegian strings'),
+        contentPadding: EdgeInsets.zero,
+        value: _useNorwegian,
+        onChanged: (v) async {
+          await widget.prefs.setBool(_prefUseNorwegianTerminatedUI, v);
+          setState(() => _useNorwegian = v);
+          await configureSdk(widget.prefs, useNorwegian: v);
+        },
       ),
     );
   }

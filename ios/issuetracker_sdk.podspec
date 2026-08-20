@@ -17,7 +17,8 @@ annotation, breadcrumbs, crash detection.
   # Native iOS SDK that this wrapper bridges to. The example app's
   # Podfile pins it to a local path during development:
   #   pod 'IssuetrackerSDK', :path => '../../../sdk-ios'
-  s.dependency 'IssuetrackerSDK', '~> 0.5'
+  # 0.6: tester attestation (ADR-0005) — setTesterToken/clearTesterToken.
+  s.dependency 'IssuetrackerSDK', '~> 0.6'
 
   s.platform = :ios, '16.0'
   s.pod_target_xcconfig = {

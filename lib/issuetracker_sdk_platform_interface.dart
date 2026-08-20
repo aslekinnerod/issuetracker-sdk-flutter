@@ -21,6 +21,8 @@ abstract class IssuetrackerSdkPlatform extends PlatformInterface {
     required String apiKey,
     required bool shakeToReport,
     required bool longPressToReport,
+    required bool accessibilityAction,
+    required bool showReportButton,
     required bool enableCrashReporting,
     required bool showOnboarding,
     TerminatedUiStrings? terminatedUI,
@@ -58,6 +60,14 @@ abstract class IssuetrackerSdkPlatform extends PlatformInterface {
 
   Future<void> recordAction(String action, {Map<String, String>? metadata}) {
     throw UnimplementedError('recordAction() has not been implemented.');
+  }
+
+  Future<void> setTesterToken(String token, {int? expiresAtMillis}) {
+    throw UnimplementedError('setTesterToken() has not been implemented.');
+  }
+
+  Future<void> clearTesterToken() {
+    throw UnimplementedError('clearTesterToken() has not been implemented.');
   }
 
   Future<void> testCrash() {

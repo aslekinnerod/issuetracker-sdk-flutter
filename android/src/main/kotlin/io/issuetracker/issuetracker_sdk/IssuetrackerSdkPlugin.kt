@@ -69,6 +69,11 @@ class IssuetrackerSdkPlugin :
                     if (title == null && subtitle == null && closeLabel == null) null
                     else TerminatedUiStrings(title = title, subtitle = subtitle, closeLabel = closeLabel)
                 }
+                // TODO: requires no.issuetracker:sdk >= 0.7 — read the
+                // "accessibilityAction" / "showReportButton" arguments the
+                // Dart layer already sends and forward them once the native
+                // SDK's configure() gains the ADR-0008 flags. Unknown map
+                // keys are ignored until then.
                 Issuetracker.configure(
                     application = app,
                     apiKey = apiKey,
@@ -116,6 +121,20 @@ class IssuetrackerSdkPlugin :
                     val metadata = call.argument<Map<String, String>>("metadata")
                     Issuetracker.recordAction(action, metadata)
                 }
+                result.success(null)
+            }
+
+            "setTesterToken" -> {
+                val token = call.argument<String>("token")
+                if (token != null) {
+                    val expiresAtMillis = call.argument<Number>("expiresAtMillis")?.toLong()
+                    Issuetracker.setTesterToken(token, expiresAtMillis)
+                }
+                result.success(null)
+            }
+
+            "clearTesterToken" -> {
+                Issuetracker.clearTesterToken()
                 result.success(null)
             }
 

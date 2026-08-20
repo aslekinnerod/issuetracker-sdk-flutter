@@ -16,6 +16,7 @@ import 'package:issuetracker_sdk/issuetracker_sdk.dart';
 void main() {
   group('SdkErrorReason', () {
     test('all canonical reasons present with correct raw values', () {
+      // ADR-0003 Decision 9 + the ADR-0005 tester-gating reasons.
       final canonical = {
         'project_deleted',
         'project_not_found',
@@ -24,6 +25,8 @@ void main() {
         'invalid_api_key',
         'quota_exceeded',
         'transient',
+        'tester_attestation_required',
+        'tester_token_invalid',
       };
       final actual =
           SdkErrorReason.values.map((r) => r.rawValue).toSet();
@@ -54,6 +57,22 @@ void main() {
       expect(SdkErrorReason.apiKeyRevoked.isRecoverable, isFalse);
       expect(SdkErrorReason.workspaceSuspended.isRecoverable, isFalse);
       expect(SdkErrorReason.invalidApiKey.isRecoverable, isFalse);
+      expect(SdkErrorReason.testerAttestationRequired.isRecoverable, isFalse);
+      expect(SdkErrorReason.testerTokenInvalid.isRecoverable, isFalse);
+    });
+
+    test('tester gating reasons are non-terminal', () {
+      // ADR-0005: non-recoverable but NOT terminal — the SDK must
+      // never transition to TERMINATED on a tester-gating rejection.
+      expect(SdkErrorReason.testerAttestationRequired.isTerminal, isFalse);
+      expect(SdkErrorReason.testerTokenInvalid.isTerminal, isFalse);
+      expect(SdkErrorReason.quotaExceeded.isTerminal, isFalse);
+      expect(SdkErrorReason.transient.isTerminal, isFalse);
+      expect(SdkErrorReason.projectDeleted.isTerminal, isTrue);
+      expect(SdkErrorReason.projectNotFound.isTerminal, isTrue);
+      expect(SdkErrorReason.apiKeyRevoked.isTerminal, isTrue);
+      expect(SdkErrorReason.workspaceSuspended.isTerminal, isTrue);
+      expect(SdkErrorReason.invalidApiKey.isTerminal, isTrue);
     });
   });
 }

@@ -36,6 +36,8 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
     required String apiKey,
     required bool shakeToReport,
     required bool longPressToReport,
+    required bool accessibilityAction,
+    required bool showReportButton,
     required bool enableCrashReporting,
     required bool showOnboarding,
     TerminatedUiStrings? terminatedUI,
@@ -44,6 +46,11 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
       'apiKey': apiKey,
       'shakeToReport': shakeToReport,
       'longPressToReport': longPressToReport,
+      // ADR-0008 flags. The native plugins read these once they compile
+      // against a native SDK that supports them (>= 0.7); older plugin
+      // builds simply ignore unknown keys.
+      'accessibilityAction': accessibilityAction,
+      'showReportButton': showReportButton,
       'enableCrashReporting': enableCrashReporting,
       'showOnboarding': showOnboarding,
       // Send the three string fields as a nested map. Native side
@@ -87,6 +94,19 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
       'action': action,
       'metadata': metadata,
     });
+  }
+
+  @override
+  Future<void> setTesterToken(String token, {int? expiresAtMillis}) async {
+    await methodChannel.invokeMethod<void>('setTesterToken', <String, dynamic>{
+      'token': token,
+      'expiresAtMillis': expiresAtMillis,
+    });
+  }
+
+  @override
+  Future<void> clearTesterToken() async {
+    await methodChannel.invokeMethod<void>('clearTesterToken');
   }
 
   @override

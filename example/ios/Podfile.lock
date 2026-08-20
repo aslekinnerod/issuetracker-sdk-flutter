@@ -1,0 +1,41 @@
+PODS:
+  - Flutter (1.0.0)
+  - integration_test (0.0.1):
+    - Flutter
+  - issuetracker_sdk (0.5.0):
+    - Flutter
+    - IssuetrackerSDK (~> 0.5)
+  - IssuetrackerSDK (0.5.1)
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - integration_test (from `.symlinks/plugins/integration_test/ios`)
+  - issuetracker_sdk (from `.symlinks/plugins/issuetracker_sdk/ios`)
+  - IssuetrackerSDK (from `../../../sdk-ios`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  integration_test:
+    :path: ".symlinks/plugins/integration_test/ios"
+  issuetracker_sdk:
+    :path: ".symlinks/plugins/issuetracker_sdk/ios"
+  IssuetrackerSDK:
+    :path: "../../../sdk-ios"
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
+
+SPEC CHECKSUMS:
+  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
+  issuetracker_sdk: 76557cc464dacf5461cad85f8c5431a0a1227a2f
+  IssuetrackerSDK: bc54e894882ffc956e314561deb989fcf75054e7
+  shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
+
+PODFILE CHECKSUM: e1f84d6e3a2ffafbec1033e843e990a92fd22a30
+
+COCOAPODS: 1.16.2

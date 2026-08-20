@@ -64,6 +64,11 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
                 if title == nil && subtitle == nil && closeLabel == nil { return nil }
                 return TerminatedUiStrings(title: title, subtitle: subtitle, closeLabel: closeLabel)
             }()
+            // TODO: requires IssuetrackerSDK >= 0.7 — read the
+            // "accessibilityAction" / "showReportButton" arguments the
+            // Dart layer already sends and forward them once the native
+            // SDK's configure() gains the ADR-0008 flags. Unknown map
+            // keys are ignored until then.
             DispatchQueue.main.async { [weak self] in
                 Issuetracker.configure(
                     apiKey: apiKey,
@@ -113,6 +118,26 @@ public class IssuetrackerSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
                 Issuetracker.recordAction(action, metadata: metadata)
             }
             result(nil)
+
+        case "setTesterToken":
+            let args = call.arguments as? [String: Any] ?? [:]
+            if let token = args["token"] as? String {
+                let expiresAt = (args["expiresAtMillis"] as? NSNumber).map {
+                    Date(timeIntervalSince1970: $0.doubleValue / 1000)
+                }
+                DispatchQueue.main.async {
+                    Issuetracker.setTesterToken(token, expiresAt: expiresAt)
+                    result(nil)
+                }
+            } else {
+                result(nil)
+            }
+
+        case "clearTesterToken":
+            DispatchQueue.main.async {
+                Issuetracker.clearTesterToken()
+                result(nil)
+            }
 
         case "testCrash":
             // Returns Never; result(nil) never reached.

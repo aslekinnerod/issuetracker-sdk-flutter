@@ -32,13 +32,34 @@ enum SdkErrorReason {
   workspaceSuspended('workspace_suspended'),
   invalidApiKey('invalid_api_key'),
   quotaExceeded('quota_exceeded'),
-  transient('transient');
+  transient('transient'),
+  testerAttestationRequired('tester_attestation_required'),
+  testerTokenInvalid('tester_token_invalid');
 
   const SdkErrorReason(this.rawValue);
   final String rawValue;
 
   bool get isRecoverable =>
       this == SdkErrorReason.quotaExceeded || this == SdkErrorReason.transient;
+
+  /// Whether this reason must flip the SDK into one-way TERMINATED.
+  /// Tester-gating rejections (ADR-0005) are non-recoverable —
+  /// retrying the same request cannot succeed — but NOT terminal:
+  /// the project is alive and the key is valid; only this install
+  /// lacks (valid) attestation.
+  bool get isTerminal => switch (this) {
+        SdkErrorReason.quotaExceeded ||
+        SdkErrorReason.transient ||
+        SdkErrorReason.testerAttestationRequired ||
+        SdkErrorReason.testerTokenInvalid =>
+          false,
+        SdkErrorReason.projectDeleted ||
+        SdkErrorReason.projectNotFound ||
+        SdkErrorReason.apiKeyRevoked ||
+        SdkErrorReason.workspaceSuspended ||
+        SdkErrorReason.invalidApiKey =>
+          true,
+      };
 
   static SdkErrorReason? fromRawValue(String? raw) {
     if (raw == null) return null;
@@ -100,10 +121,25 @@ class Issuetracker {
   /// (the method) is called explicitly. With both [shakeToReport] and
   /// [longPressToReport] disabled the popover is silently skipped.
   /// Defaults to `false`.
+  ///
+  /// If [accessibilityAction] is `true`, the underlying native SDK
+  /// registers a screen-reader custom action ("Report a bug") while
+  /// VoiceOver / TalkBack is running, giving screen-reader users a
+  /// gesture-free path to the reporter (the OS screen reader typically
+  /// claims the shake and multi-finger gestures). See ADR-0008
+  /// Decision 2. Defaults to `false`.
+  ///
+  /// If [showReportButton] is `true`, the underlying native SDK
+  /// renders a small floating "Report a bug" button — a one-line path
+  /// to a visible, WCAG-conformant entry point for hosts that don't
+  /// wire their own control to [report]. See ADR-0008 Decision 3.
+  /// Defaults to `false`.
   static Future<void> configure({
     required String apiKey,
     bool shakeToReport = true,
     bool longPressToReport = true,
+    bool accessibilityAction = false,
+    bool showReportButton = false,
     bool enableCrashReporting = true,
     void Function(SdkErrorReason reason)? onConfigurationError,
     bool showOnboarding = false,
@@ -125,6 +161,8 @@ class Issuetracker {
       apiKey: apiKey,
       shakeToReport: shakeToReport,
       longPressToReport: longPressToReport,
+      accessibilityAction: accessibilityAction,
+      showReportButton: showReportButton,
       enableCrashReporting: enableCrashReporting,
       showOnboarding: showOnboarding,
       terminatedUI: terminatedUI,
@@ -156,6 +194,22 @@ class Issuetracker {
     return IssuetrackerSdkPlatform.instance
         .recordAction(action, metadata: metadata);
   }
+
+  /// Stores a tester attestation token (ADR-0005). On projects in
+  /// testers-only mode this is what unlocks the report triggers and
+  /// gets reports past the server; in open mode it stamps reports
+  /// with the tester's identity. The token will normally arrive from
+  /// the native companion-app transports; this API is the manual
+  /// injection point until those ship (and for integration tests).
+  static Future<void> setTesterToken(String token, {int? expiresAtMillis}) {
+    return IssuetrackerSdkPlatform.instance
+        .setTesterToken(token, expiresAtMillis: expiresAtMillis);
+  }
+
+  /// Removes the stored tester token. On testers-only projects the
+  /// gesture triggers go inert again from the next gesture.
+  static Future<void> clearTesterToken() =>
+      IssuetrackerSdkPlatform.instance.clearTesterToken();
 
   /// Throws inside the native layer. SDK integration testing only.
   static Future<void> testCrash() =>
