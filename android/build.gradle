@@ -9,7 +9,7 @@ buildscript {
     }
 
     dependencies {
-        classpath("com.android.tools.build:gradle:8.7.0")
+        classpath("com.android.tools.build:gradle:8.9.1")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
     }
 }
@@ -54,13 +54,22 @@ android {
         // 0.6.0: tester attestation (ADR-0005) — setTesterToken/clearTesterToken.
         implementation("no.issuetracker:sdk:0.6.0")
 
+        // JUnit 4 is the runner Android unit tests use by default. It is
+        // declared explicitly because the previous config called
+        // useJUnitPlatform() without a JUnit 5 engine on the classpath,
+        // which makes the task run zero tests and still report success.
+        testImplementation("junit:junit:4.13.2")
         testImplementation("org.jetbrains.kotlin:kotlin-test")
         testImplementation("org.mockito:mockito-core:5.0.0")
     }
 
     testOptions {
+        // The plugin constructor touches android.os.Looper. Without this,
+        // every android.jar stub throws "not mocked" and the dispatch
+        // tests cannot construct the plugin at all.
+        unitTests.returnDefaultValues = true
+
         unitTests.all {
-            useJUnitPlatform()
             testLogging {
                 events "passed", "skipped", "failed", "standardOut", "standardError"
                 outputs.upToDateWhen { false }

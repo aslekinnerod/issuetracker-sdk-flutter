@@ -9,10 +9,10 @@ enum IssueReportType {
   story;
 
   String get wireValue => switch (this) {
-        IssueReportType.bug => 'bug',
-        IssueReportType.task => 'task',
-        IssueReportType.story => 'story',
-      };
+    IssueReportType.bug => 'bug',
+    IssueReportType.task => 'task',
+    IssueReportType.story => 'story',
+  };
 }
 
 /// Machine-readable reason for an SDK-callable failure. The `rawValue`
@@ -48,18 +48,16 @@ enum SdkErrorReason {
   /// the project is alive and the key is valid; only this install
   /// lacks (valid) attestation.
   bool get isTerminal => switch (this) {
-        SdkErrorReason.quotaExceeded ||
-        SdkErrorReason.transient ||
-        SdkErrorReason.testerAttestationRequired ||
-        SdkErrorReason.testerTokenInvalid =>
-          false,
-        SdkErrorReason.projectDeleted ||
-        SdkErrorReason.projectNotFound ||
-        SdkErrorReason.apiKeyRevoked ||
-        SdkErrorReason.workspaceSuspended ||
-        SdkErrorReason.invalidApiKey =>
-          true,
-      };
+    SdkErrorReason.quotaExceeded ||
+    SdkErrorReason.transient ||
+    SdkErrorReason.testerAttestationRequired ||
+    SdkErrorReason.testerTokenInvalid => false,
+    SdkErrorReason.projectDeleted ||
+    SdkErrorReason.projectNotFound ||
+    SdkErrorReason.apiKeyRevoked ||
+    SdkErrorReason.workspaceSuspended ||
+    SdkErrorReason.invalidApiKey => true,
+  };
 
   static SdkErrorReason? fromRawValue(String? raw) {
     if (raw == null) return null;
@@ -145,17 +143,25 @@ class Issuetracker {
     bool showOnboarding = false,
     TerminatedUiStrings? terminatedUI,
   }) async {
-    // Tear down any prior subscription so a re-configure() with a
-    // different callback doesn't end up firing both. Subsequent
-    // configure() calls are uncommon but the SDK doesn't forbid them.
-    await _configErrorSub?.cancel();
-    _configErrorSub = null;
-
-    if (onConfigurationError != null) {
-      _configErrorSub = IssuetrackerSdkPlatform.instance
-          .configurationErrorEvents
-          .listen(onConfigurationError);
-    }
+    // Swap the subscription synchronously — claim the slot and hand
+    // over the old subscription in the same turn of the event loop —
+    // so a re-configure() with a different callback doesn't end up
+    // firing both. Subsequent configure() calls are uncommon but the
+    // SDK doesn't forbid them, and two overlapping un-awaited calls
+    // (app start-up + a settings toggle) must not each install a
+    // listener. Awaiting the cancel first would yield between read and
+    // write and leak the earlier subscription. ADR-0003 Decision 9.
+    final StreamSubscription<SdkErrorReason>? previous = _configErrorSub;
+    _configErrorSub =
+        onConfigurationError == null
+            ? null
+            : IssuetrackerSdkPlatform.instance.configurationErrorEvents.listen(
+              onConfigurationError,
+            );
+    // StreamSubscription.cancel() detaches the listener synchronously;
+    // the future only completes the platform-side teardown, so no
+    // event can reach both callbacks in between.
+    await previous?.cancel();
 
     await IssuetrackerSdkPlatform.instance.configure(
       apiKey: apiKey,
@@ -191,8 +197,10 @@ class Issuetracker {
     String action, {
     Map<String, String>? metadata,
   }) {
-    return IssuetrackerSdkPlatform.instance
-        .recordAction(action, metadata: metadata);
+    return IssuetrackerSdkPlatform.instance.recordAction(
+      action,
+      metadata: metadata,
+    );
   }
 
   /// Stores a tester attestation token (ADR-0005). On projects in
@@ -202,8 +210,10 @@ class Issuetracker {
   /// the native companion-app transports; this API is the manual
   /// injection point until those ship (and for integration tests).
   static Future<void> setTesterToken(String token, {int? expiresAtMillis}) {
-    return IssuetrackerSdkPlatform.instance
-        .setTesterToken(token, expiresAtMillis: expiresAtMillis);
+    return IssuetrackerSdkPlatform.instance.setTesterToken(
+      token,
+      expiresAtMillis: expiresAtMillis,
+    );
   }
 
   /// Removes the stored tester token. On testers-only projects the

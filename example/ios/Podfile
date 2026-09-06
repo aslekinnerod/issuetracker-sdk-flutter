@@ -33,11 +33,18 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 
-  # Pin IssuetrackerSDK to the sibling local repo during development
-  # so SDK source edits land on the next `pod install` without
-  # round-tripping through CocoaPods trunk. Drop this line when
-  # consuming a published version from the registry.
-  pod 'IssuetrackerSDK', :path => '../../../sdk-ios'
+  # During development, resolve IssuetrackerSDK from the sibling local
+  # repo so SDK source edits land on the next `pod install` without
+  # round-tripping through CocoaPods trunk. When that checkout is absent
+  # — CI, or anyone consuming this plugin — fall through to the version
+  # the plugin's own podspec pins, resolved from trunk, which is the code
+  # path a customer actually takes. Set ISSUETRACKER_IOS_SDK_PATH to
+  # point somewhere else, or to '' to force the trunk path locally.
+  local_sdk = ENV.fetch('ISSUETRACKER_IOS_SDK_PATH', '../../../sdk-ios')
+  unless local_sdk.empty? ||
+         !File.exist?(File.expand_path(File.join(local_sdk, 'IssuetrackerSDK.podspec'), __dir__))
+    pod 'IssuetrackerSDK', :path => local_sdk
+  end
 
   target 'RunnerTests' do
     inherit! :search_paths

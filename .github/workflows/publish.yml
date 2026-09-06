@@ -1,0 +1,67 @@
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      # Match semver tags (0.6.0, 1.0.0, 1.0.0-rc.1). Every version
+      # string must already match the tag — see the verify job.
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # The same gates that guard main, run against the tagged commit.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  verify-tag:
+    name: Tag matches the package version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # Runs unconditionally, workflow_dispatch included. A step-level
+      # `if: github.event_name == 'push'` would be skipped on a manual
+      # dispatch, the job would still conclude success, and `publish`'s
+      # `needs: [ci, verify-tag]` would be satisfied — publishing to
+      # pub.dev with nothing having compared the ref to pubspec.yaml.
+      # The upstream reusable publish workflow does not re-validate:
+      # it only runs `dart pub publish --dry-run` then `-f`.
+      - name: Tag ref matches every declared version
+        run: |
+          set -euo pipefail
+          # Applies to workflow_dispatch as well as tag pushes: a manual
+          # run must select a tag in the ref dropdown. Dispatching on a
+          # branch would otherwise publish whatever pubspec.yaml happens
+          # to say on that branch, under a version nobody chose.
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::Publishing requires a tag ref, got ${GITHUB_REF_TYPE} '${GITHUB_REF_NAME}'. Re-run this workflow with a release tag selected as the ref."
+            exit 1
+          fi
+          tool/check_versions.sh "${GITHUB_REF_NAME}"
+
+  # pub.dev automated publishing: the OIDC token from this workflow is
+  # exchanged for a short-lived credential, so nothing is published from
+  # a laptop's ~/.config/dart/pub-credentials.json and the release is
+  # traceable to this repo, workflow and commit.
+  #
+  # ONE-TIME SETUP, still outstanding: issuetracker_sdk does not exist on
+  # pub.dev yet (the 0.4.0/0.4.1/0.5.0 tags were never published), and a
+  # trusted publisher can only be configured on a package that exists.
+  # So the first release has to be a manual `flutter pub publish`, after
+  # which Admin → Automated publishing on pub.dev is pointed at
+  # aslekinnerod/issuetracker-sdk-flutter + .github/workflows/publish.yml
+  # and every later release goes through this job. Same bootstrap the
+  # npm trusted publisher needed in sdk-web.
+  publish:
+    needs: [ci, verify-tag]
+    permissions:
+      contents: read
+      id-token: write # required to mint the pub.dev OIDC token
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1

@@ -28,8 +28,7 @@ void main() {
         'tester_attestation_required',
         'tester_token_invalid',
       };
-      final actual =
-          SdkErrorReason.values.map((r) => r.rawValue).toSet();
+      final actual = SdkErrorReason.values.map((r) => r.rawValue).toSet();
       expect(actual, equals(canonical));
     });
 

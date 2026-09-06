@@ -4,15 +4,123 @@ on:
   push:
     branches: [main]
   pull_request:
+  # publish.yml calls this workflow, so a release runs the same gates
+  # that guard main — not a subset of them.
+  workflow_call:
+  # pubspec.yaml uses caret ranges and a library checks in no lockfile,
+  # so the resolved dependency set drifts between runs. The weekly run
+  # finds that drift instead of a random contributor's PR.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+# Nothing here needs to write to the repository. Without this the jobs
+# inherit the repo default, which on repos created before 2023 is
+# read/write on contents — a token handed to third-party actions on
+# every push to main.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  dart:
+    name: Dart
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: '3.29.3'
           channel: stable
+          cache: true
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --fatal-infos
+      - run: dart format --output=none --set-exit-if-changed .
+      # The cross-SDK wire contract (ADR-0003 Decision 9) lives in test/:
+      # reason rawValues, isRecoverable mapping, terminated lifecycle.
+      - run: flutter test
+      - name: Versions agree across pubspec, Gradle and podspec
+        run: tool/check_versions.sh
+      # Runs the validations pub.dev runs — CHANGELOG mentions the
+      # current version, LICENSE, pubspec fields — and exits non-zero on
+      # any warning, so a release that would be rejected or docked is
+      # caught before the tag is cut.
+      - name: Package would pass pub.dev validation
+        run: flutter pub publish --dry-run
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
+          cache: true
+      # `flutter analyze` never looks at Kotlin and never resolves the
+      # native dependency. Building the example app is what a consumer
+      # does: it fetches no.issuetracker:sdk from Maven Central and
+      # compiles IssuetrackerSdkPlugin.kt.
+      - name: Build the example app
+        working-directory: example
+        run: flutter build apk --debug
+      - name: Kotlin unit tests
+        working-directory: example/android
+        run: ./gradlew :issuetracker_sdk:testDebugUnitTest
+
+  # DISABLED, deliberately, until the iOS half of this plugin is
+  # installable. The podspec pins IssuetrackerSDK 0.6.0 and CocoaPods
+  # trunk has no IssuetrackerSDK at all (sdk-ios is tagged 0.5.1), so
+  # `pod install` cannot resolve and every step below fails. That is a
+  # true statement about the product, not a CI defect — but a job that
+  # is known to fail on every run is worse than no job: within two
+  # weeks nobody tells the known-red iOS failure from a real one, and
+  # publish.yml's `needs: [ci, ...]` could never be satisfied, so the
+  # release path would be dead.
+  #
+  # NOT COVERED while this is off: IssuetrackerSdkPlugin.swift is
+  # compiled by nothing, the podspec's CocoaPods graph is resolved by
+  # nothing, and the Swift unit tests run nowhere. Only the Dart and
+  # Android halves are verified. tool/check_versions.sh still asserts
+  # the podspec's version and native pin agree with the other files.
+  #
+  # TO ENABLE (one repo-settings change, no commit): publish
+  # IssuetrackerSDK to CocoaPods trunk at the version ios/
+  # issuetracker_sdk.podspec pins, then set repository variable
+  # FLUTTER_IOS_CI=true (Settings → Secrets and variables → Actions →
+  # Variables). Verify the first run before cutting a release.
+  ios:
+    name: iOS
+    if: vars.FLUTTER_IOS_CI == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
+          cache: true
+      # Same reasoning as the Android job: this resolves the real
+      # CocoaPods graph and compiles IssuetrackerSdkPlugin.swift. There
+      # is deliberately no sibling sdk-ios checkout here — CI has to
+      # take the path a customer takes, which is what makes this job
+      # unrunnable until the pod is on trunk (see the job's `if`).
+      - name: Build the example app
+        working-directory: example
+        run: flutter build ios --no-codesign
+      - name: Swift unit tests
+        working-directory: example/ios
+        run: |
+          xcodebuild test \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -destination 'platform=iOS Simulator,name=iPhone 16'

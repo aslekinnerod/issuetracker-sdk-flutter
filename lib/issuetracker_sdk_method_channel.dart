@@ -14,21 +14,23 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
   // Native side sends the SdkErrorReason rawValue as a String when the
   // underlying SDK transitions to TERMINATED.
   @visibleForTesting
-  final eventChannel =
-      const EventChannel('issuetracker_sdk/configuration_error');
+  final eventChannel = const EventChannel(
+    'issuetracker_sdk/configuration_error',
+  );
 
   Stream<SdkErrorReason>? _configurationErrorEvents;
 
   @override
   Stream<SdkErrorReason> get configurationErrorEvents {
-    return _configurationErrorEvents ??= eventChannel
-        .receiveBroadcastStream()
-        .map<SdkErrorReason?>((dynamic raw) {
-          if (raw is String) return SdkErrorReason.fromRawValue(raw);
-          return null;
-        })
-        .where((r) => r != null)
-        .cast<SdkErrorReason>();
+    return _configurationErrorEvents ??=
+        eventChannel
+            .receiveBroadcastStream()
+            .map<SdkErrorReason?>((dynamic raw) {
+              if (raw is String) return SdkErrorReason.fromRawValue(raw);
+              return null;
+            })
+            .where((r) => r != null)
+            .cast<SdkErrorReason>();
   }
 
   @override
@@ -56,13 +58,14 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
       // Send the three string fields as a nested map. Native side
       // reads each by key and falls back to its own English default
       // when missing. ADR-0003 Decision 9.
-      'terminatedUI': terminatedUI == null
-          ? null
-          : <String, String?>{
-              'title': terminatedUI.title,
-              'subtitle': terminatedUI.subtitle,
-              'closeLabel': terminatedUI.closeLabel,
-            },
+      'terminatedUI':
+          terminatedUI == null
+              ? null
+              : <String, String?>{
+                'title': terminatedUI.title,
+                'subtitle': terminatedUI.subtitle,
+                'closeLabel': terminatedUI.closeLabel,
+              },
     });
   }
 
@@ -89,7 +92,10 @@ class MethodChannelIssuetrackerSdk extends IssuetrackerSdkPlatform {
   }
 
   @override
-  Future<void> recordAction(String action, {Map<String, String>? metadata}) async {
+  Future<void> recordAction(
+    String action, {
+    Map<String, String>? metadata,
+  }) async {
     await methodChannel.invokeMethod<void>('recordAction', <String, dynamic>{
       'action': action,
       'metadata': metadata,

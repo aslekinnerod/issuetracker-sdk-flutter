@@ -33,13 +33,14 @@ Future<void> configureSdk(
   SharedPreferences prefs, {
   required bool useNorwegian,
 }) async {
-  final terminatedUI = useNorwegian
-      ? const TerminatedUiStrings(
-          title: 'Feilrapportering er ikke lenger tilgjengelig.',
-          subtitle: 'Kontakt teamet ditt.',
-          closeLabel: 'Lukk',
-        )
-      : null;
+  final terminatedUI =
+      useNorwegian
+          ? const TerminatedUiStrings(
+            title: 'Feilrapportering er ikke lenger tilgjengelig.',
+            subtitle: 'Kontakt teamet ditt.',
+            closeLabel: 'Lukk',
+          )
+          : null;
 
   await Issuetracker.configure(
     apiKey: _apiKey,
@@ -56,7 +57,10 @@ Future<void> configureSdk(
       // Persist so the Lifecycle section can show what fired. The
       // SDK has already transitioned to TERMINATED by this point.
       prefs.setString(_prefLastConfigError, reason.rawValue);
-      prefs.setInt(_prefLastConfigErrorAt, DateTime.now().millisecondsSinceEpoch);
+      prefs.setInt(
+        _prefLastConfigErrorAt,
+        DateTime.now().millisecondsSinceEpoch,
+      );
       SemanticsService.announce(
         'Configuration error: ${reason.rawValue}',
         TextDirection.ltr,
@@ -167,18 +171,18 @@ class _SampleScreenState extends State<SampleScreen> {
               child: Text(
                 title.toUpperCase(),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             if (subtitle != null) ...[
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
             const SizedBox(height: 12),
@@ -199,9 +203,10 @@ class _SampleScreenState extends State<SampleScreen> {
       whenStr = mins < 1 ? 'just now' : '$mins min ago';
     }
 
-    final subtitle = lastError != null
-        ? 'Last onConfigurationError: $lastError ($whenStr)'
-        : 'Listening for onConfigurationError. Nothing fired yet.';
+    final subtitle =
+        lastError != null
+            ? 'Last onConfigurationError: $lastError ($whenStr)'
+            : 'Listening for onConfigurationError. Nothing fired yet.';
 
     return _sectionCard(
       title: 'Lifecycle',
@@ -285,8 +290,8 @@ class _SampleScreenState extends State<SampleScreen> {
             Text(
               _identityFeedback!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ],
@@ -350,8 +355,8 @@ class _SampleScreenState extends State<SampleScreen> {
             Text(
               'Recorded: ${_recentBreadcrumbs.join(' → ')}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -408,25 +413,26 @@ class _SampleScreenState extends State<SampleScreen> {
   Future<void> _confirmAndCrash() async {
     final go = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Force crash'),
-        content: const Text(
-          'This will throw and the app process will die. Re-open the app and the SDK will queue a crash report on the next launch.',
-        ),
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Force crash'),
+            content: const Text(
+              'This will throw and the app process will die. Re-open the app and the SDK will queue a crash report on the next launch.',
             ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Crash now'),
+            actions: [
+              OutlinedButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Crash now'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
     if (go == true) {
       await Issuetracker.testCrash();
