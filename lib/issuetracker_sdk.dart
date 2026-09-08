@@ -21,10 +21,13 @@ enum IssueReportType {
 /// across all five SDKs. See ADR-0003 Decision 9.
 ///
 /// Recoverable reasons ([SdkErrorReason.quotaExceeded],
-/// [SdkErrorReason.transient]) keep the SDK in the OK state. Non-
-/// recoverable reasons transition the underlying native SDK to a
-/// one-way TERMINATED state — recovery requires a fresh
-/// [Issuetracker.configure] call (in practice an app relaunch).
+/// [SdkErrorReason.transient]) keep the SDK in the OK state. The five
+/// *terminal* reasons ([SdkErrorReason.isTerminal]) transition the
+/// underlying native SDK to a one-way TERMINATED state that is
+/// persisted on the device: neither a relaunch nor a fresh
+/// [Issuetracker.configure] (nor a rotated API key) brings it back.
+/// Non-recoverable-but-non-terminal reasons — the ADR-0005 tester
+/// gating pair — reject the one request and change no state at all.
 enum SdkErrorReason {
   projectDeleted('project_deleted'),
   projectNotFound('project_not_found'),
@@ -104,11 +107,17 @@ class Issuetracker {
   ///
   /// [onConfigurationError] is invoked once when the underlying native
   /// SDK transitions to the terminated state because the server
-  /// signalled a non-recoverable failure (project deleted, API key
-  /// revoked, workspace suspended, etc.). Default behaviour is silent;
-  /// host apps may forward this to their own telemetry. Once invoked,
-  /// the SDK will not call the report endpoint again for the lifetime
-  /// of this install — recovery requires a fresh [configure] call.
+  /// signalled a *terminal* failure (project deleted, project not
+  /// found, API key revoked, workspace suspended, invalid API key —
+  /// the reasons for which [SdkErrorReason.isTerminal] is `true`, and
+  /// the only ones delivered here). Recoverable reasons and the
+  /// ADR-0005 tester-gating rejections are handled inside the SDK and
+  /// never reach this callback: they do not mean "your project is
+  /// gone". Default behaviour is silent; host apps may forward this to
+  /// their own telemetry. Once invoked, the SDK will not call the
+  /// report endpoint again for the lifetime of this *install* — the
+  /// terminated state is persisted on the device, so it survives an
+  /// app relaunch and a later [configure] with a different API key.
   /// See ADR-0003 Decision 9.
   ///
   /// If [showOnboarding] is `true`, presents a one-time popover on
@@ -155,9 +164,20 @@ class Issuetracker {
     _configErrorSub =
         onConfigurationError == null
             ? null
-            : IssuetrackerSdkPlatform.instance.configurationErrorEvents.listen(
-              onConfigurationError,
-            );
+            : IssuetrackerSdkPlatform.instance.configurationErrorEvents
+                // One predicate, on every platform, for every path:
+                // `isTerminal` — never `!isRecoverable`. The native
+                // SDKs raise this event only on the one-way
+                // OK -> TERMINATED transition, so a recoverable reason
+                // (quota_exceeded / transient) or an ADR-0005
+                // tester-gating rejection arriving here is a native
+                // regression; forwarding it would tell the host app
+                // its project is gone while the project is alive and
+                // its key valid. Drop it instead. Mirrors the same
+                // gate in sdk-react-native's facade (isSdkErrorTerminal)
+                // and sdk-web. ADR-0003 Decision 9 point 4.
+                .where((SdkErrorReason reason) => reason.isTerminal)
+                .listen(onConfigurationError);
     // StreamSubscription.cancel() detaches the listener synchronously;
     // the future only completes the platform-side teardown, so no
     // event can reach both callbacks in between.

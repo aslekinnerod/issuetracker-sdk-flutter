@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+* `onConfigurationError` now fires only for the five *terminal* reasons
+  ADR-0003 Decision 9 defines it for. Recoverable reasons
+  (`quota_exceeded`, `transient`) and the ADR-0005 tester-gating
+  rejections (`tester_attestation_required`, `tester_token_invalid`)
+  are no longer forwarded to host apps — they do not mean the project
+  is gone, and the other four SDKs never reported them here. The gate
+  is `SdkErrorReason.isTerminal`, the same predicate the rest of the
+  fleet uses (ITD-163). Hosts that logged every reason from this
+  callback will now see only terminations; the raw feed is still
+  available on `IssuetrackerSdkPlatform.instance.configurationErrorEvents`.
+
 * Thread `terminatedUI` strings (title, subtitle, close label) through
   `configure()` to both native SDKs — ADR-0003 Decision 9.
 * Rebuild the example app as a full SDK demo, with accessibility fixes

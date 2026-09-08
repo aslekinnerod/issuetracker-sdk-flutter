@@ -34,12 +34,20 @@ abstract class IssuetrackerSdkPlatform extends PlatformInterface {
     throw UnimplementedError('showOnboarding() has not been implemented.');
   }
 
-  /// Stream of TERMINATED-transition events from the native SDK.
-  /// Emits exactly once for the lifetime of a deployed install. See
-  /// ADR-0003 Decision 9. The implementation backs onto an
-  /// EventChannel; subscribers are responsible for cancelling when
-  /// they're done (the [Issuetracker.configure] facade manages its
-  /// own subscription).
+  /// Raw transport for the native SDK's configuration-error events:
+  /// whatever reason the native side emits, decoded to
+  /// [SdkErrorReason]. In practice the native SDKs raise it only on
+  /// the one-way OK -> TERMINATED transition, so it emits at most once
+  /// for the lifetime of a deployed install — but this getter does not
+  /// enforce that. The terminal gate ([SdkErrorReason.isTerminal])
+  /// lives in [Issuetracker.configure], which is the surface host apps
+  /// subscribe through; anything reading this stream directly gets the
+  /// unfiltered feed and owns the same classification decision. See
+  /// ADR-0003 Decision 9.
+  ///
+  /// The implementation backs onto an EventChannel; subscribers are
+  /// responsible for cancelling when they're done (the
+  /// [Issuetracker.configure] facade manages its own subscription).
   Stream<SdkErrorReason> get configurationErrorEvents {
     throw UnimplementedError(
       'configurationErrorEvents has not been implemented.',

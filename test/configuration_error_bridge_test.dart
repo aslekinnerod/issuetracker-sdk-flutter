@@ -107,34 +107,77 @@ void main() {
       }
     });
 
-    test(
-      'recoverable reasons reach the callback but are not terminal',
-      () async {
-        // quota_exceeded is recoverable (ADR-0003 Decision 9 point 2):
-        // the host must not tear anything down on it. The bridge still
-        // forwards it if native chooses to emit it, so hosts have to be
-        // able to tell the two apart from the reason alone.
-        final seen = <SdkErrorReason>[];
-        await Issuetracker.configure(
-          apiKey: 'it_test_key',
-          onConfigurationError: seen.add,
-        );
+    test('non-terminal reasons are dropped, not forwarded', () async {
+      // ITD-163. onConfigurationError means one thing on all five SDKs:
+      // "this install is TERMINATED" (ADR-0003 Decision 9 point 4 lists
+      // exactly five reasons). quota_exceeded / transient are handled
+      // inside the SDK, and the ADR-0005 tester-gating pair is
+      // non-recoverable but NOT terminal — the project is alive and the
+      // key is valid. Forwarding either would hand the host a
+      // "your project is gone" signal that is false, which is the whole
+      // hazard: hosts wire this to telemetry and to their own kill
+      // switches. The native SDKs emit only on the OK -> TERMINATED
+      // transition, so anything else arriving here is a native
+      // regression and the bridge is the backstop.
+      final seen = <SdkErrorReason>[];
+      await Issuetracker.configure(
+        apiKey: 'it_test_key',
+        onConfigurationError: seen.add,
+      );
 
-        platform.emitFromNative(SdkErrorReason.quotaExceeded);
-        platform.emitFromNative(SdkErrorReason.transient);
-        await _pump();
+      platform.emitFromNative(SdkErrorReason.quotaExceeded);
+      platform.emitFromNative(SdkErrorReason.transient);
+      platform.emitFromNative(SdkErrorReason.testerAttestationRequired);
+      platform.emitFromNative(SdkErrorReason.testerTokenInvalid);
+      await _pump();
 
-        expect(
-          seen,
-          equals(<SdkErrorReason>[
-            SdkErrorReason.quotaExceeded,
-            SdkErrorReason.transient,
-          ]),
-        );
-        expect(seen.every((r) => r.isTerminal), isFalse);
-        expect(seen.every((r) => r.isRecoverable), isTrue);
-      },
-    );
+      expect(seen, isEmpty);
+
+      // ...and the gate is on terminality, not on recoverability: a
+      // terminal reason still gets through immediately afterwards.
+      platform.emitFromNative(SdkErrorReason.projectDeleted);
+      await _pump();
+      expect(seen, equals(<SdkErrorReason>[SdkErrorReason.projectDeleted]));
+    });
+
+    test('the gate is isTerminal, not !isRecoverable', () async {
+      // The two predicates are NOT interchangeable, and this is the
+      // exact substitution ITD-163 was filed about: seven of the nine
+      // wire reasons are non-recoverable, but only five of those seven
+      // are terminal — `!isRecoverable` over-approximates `isTerminal`
+      // by the two ADR-0005 tester-gating reasons. A path gated on
+      // `!isRecoverable` would permanently kill an SDK that the other
+      // four platforms keep alive.
+      final overApproximated =
+          SdkErrorReason.values
+              .where((r) => !r.isRecoverable && !r.isTerminal)
+              .toSet();
+      expect(
+        overApproximated,
+        equals(<SdkErrorReason>{
+          SdkErrorReason.testerAttestationRequired,
+          SdkErrorReason.testerTokenInvalid,
+        }),
+        reason: 'ADR-0005 gating: non-recoverable, deliberately non-terminal',
+      );
+
+      final delivered = <SdkErrorReason>[];
+      await Issuetracker.configure(
+        apiKey: 'it_test_key',
+        onConfigurationError: delivered.add,
+      );
+      for (final reason in SdkErrorReason.values) {
+        platform.emitFromNative(reason);
+      }
+      await _pump();
+
+      expect(
+        delivered.toSet(),
+        equals(SdkErrorReason.values.where((r) => r.isTerminal).toSet()),
+        reason: 'the facade delivers exactly the terminal set',
+      );
+      expect(delivered.length, 5, reason: 'ADR-0003 Decision 9 point 4');
+    });
 
     test('subscription is armed before native configure runs', () async {
       // A termination raised while the native side is still inside

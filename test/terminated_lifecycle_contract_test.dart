@@ -139,11 +139,25 @@ enum SubmitOutcome {
 
 enum ReporterSurface { reportForm, terminalMessage }
 
-/// Stands in for SharedPreferences / UserDefaults: the only state that
-/// outlives a process restart.
+/// Stands in for SharedPreferences / UserDefaults plus the SDK's own
+/// on-disk stores: the only state that outlives a process restart.
 class FakeDisk {
   String? terminatedReason;
   int? terminatedAtMillis;
+
+  /// The report queue. On disk because Decision 9 point 6 requires
+  /// queued reports to survive a relaunch while the SDK is OK or
+  /// SUSPENDED — which is also what makes "purged on TERMINATED" a
+  /// claim worth testing rather than a side effect of the process
+  /// ending.
+  final List<String> queue = <String>[];
+
+  /// The pending-crash store (sdk-ios `PendingCrashStore`, the crash
+  /// file sdk-android's `CrashReporter` drains). Written by the crash
+  /// handler at crash time, uploaded on a later launch — so it is
+  /// queue state under Decision 9 point 6, and is purged with the
+  /// queue on the first terminal signal.
+  final List<String> pendingCrashes = <String>[];
 }
 
 /// A fake sdk-android / sdk-ios instance. Decisions are made with this
@@ -158,15 +172,28 @@ class FakeNativeSdk {
   final StreamController<SdkErrorReason> events =
       StreamController<SdkErrorReason>.broadcast();
 
-  final List<String> queue = <String>[];
+  List<String> get queue => disk.queue;
   bool shakeEnabled = false;
   bool longPressEnabled = false;
   bool floatingButtonEnabled = false;
+  bool crashHandlerInstalled = false;
   String? apiKey;
 
   /// Counts calls that actually reached the network. A TERMINATED SDK
   /// must never increment this again.
   int serverCalls = 0;
+
+  /// The two launch-path background calls, counted separately because
+  /// they are the ones no manual test exercises — they run before the
+  /// first frame and after the process that crashed is already gone
+  /// (ITD-164).
+  int configFetches = 0;
+  int crashUploads = 0;
+
+  /// What the server answers those two calls with on this launch;
+  /// `null` means HTTP 200.
+  CallableError? nextConfigError;
+  CallableError? nextCrashUploadError;
 
   set clock(DateTime Function() value) => _clock = value;
 
@@ -191,14 +218,64 @@ class FakeNativeSdk {
       // app runs from main() on each launch — must not resurrect the
       // SDK, and must not re-arm triggers or resurrect a queue.
       queue.clear();
+      disk.pendingCrashes.clear();
       shakeEnabled = false;
       longPressEnabled = false;
       floatingButtonEnabled = false;
+      crashHandlerInstalled = false;
+      // ...and, critically, must not run either launch-path background
+      // call. Both are below this return on purpose: ITD-164 is exactly
+      // the case where they sat above one.
       return;
     }
     shakeEnabled = shakeToReport;
     longPressEnabled = longPressToReport;
     floatingButtonEnabled = showReportButton;
+    crashHandlerInstalled = true;
+    refreshRemoteConfig();
+    reportCrashIfAny();
+  }
+
+  /// Launch-path background call #1 — the remote-config / tester-
+  /// attestation refresh both native SDKs run from `configure()`, on
+  /// every single launch, forever. Nobody watches a POST that happens
+  /// before the first frame, so the guard needs a test rather than a
+  /// manual pass.
+  SubmitOutcome? refreshRemoteConfig() {
+    if (isTerminated) return null;
+    serverCalls++;
+    configFetches++;
+    final error = nextConfigError;
+    return error == null ? null : _dispatch(error);
+  }
+
+  /// Launch-path background call #2 — draining the crash store the
+  /// native crash handler wrote. Delivery lands 0-24h after the crash
+  /// itself, on some later launch, which is why a terminal answer here
+  /// is the one a human never sees.
+  SubmitOutcome? reportCrashIfAny() {
+    if (isTerminated) return null;
+    if (disk.pendingCrashes.isEmpty) return null;
+    serverCalls++;
+    crashUploads++;
+    final error = nextCrashUploadError;
+    if (error == null) {
+      disk.pendingCrashes.clear(); // delivered
+      return SubmitOutcome.accepted;
+    }
+    // The crash path dispatches like every other path. Swallowing the
+    // error here — sdk-android's `catch (_: Exception) { }`, sdk-ios's
+    // silent `sendConfirmedCrash` failure — leaves the SDK live against
+    // a project that is gone.
+    return _dispatch(error);
+  }
+
+  /// The native crash handler writing one crash to disk at crash time.
+  /// A TERMINATED install has no handler installed, so nothing can
+  /// repopulate the store behind the purge.
+  void recordCrash(String crash) {
+    if (!crashHandlerInstalled) return;
+    disk.pendingCrashes.add(crash);
   }
 
   /// What the test-cohort user sees when they open the reporting
@@ -216,8 +293,23 @@ class FakeNativeSdk {
     serverCalls++;
     if (error == null) return SubmitOutcome.accepted;
 
-    // THE dispatch: `details.error` only. `error.code` and
-    // `error.httpStatus` are deliberately never read.
+    final outcome = _dispatch(error);
+    if (outcome == SubmitOutcome.queued) queue.add(body);
+    return outcome;
+  }
+
+  /// THE dispatch — the one every network path funnels through: submit,
+  /// the launch-time config refresh, and the crash upload. Two rules,
+  /// and both are cross-platform findings:
+  ///
+  /// - ITD-164: no path may swallow a terminal answer. A background
+  ///   path that catches and drops it keeps a dead install alive.
+  /// - ITD-163: one predicate, `SdkErrorReason.isTerminal`, read off
+  ///   `details.error`. Never a path-local variant, never
+  ///   `!isRecoverable` (which would swallow the ADR-0005 tester pair
+  ///   into TERMINATED), and never the HTTP status — `error.code` and
+  ///   `error.httpStatus` are deliberately never read here.
+  SubmitOutcome _dispatch(CallableError error) {
     final reason = SdkErrorReason.fromRawValue(error.wireReason);
     if (reason == null) return SubmitOutcome.unclassified;
 
@@ -225,10 +317,7 @@ class FakeNativeSdk {
       _terminate(reason);
       return SubmitOutcome.terminated;
     }
-    if (reason.isRecoverable) {
-      queue.add(body);
-      return SubmitOutcome.queued;
-    }
+    if (reason.isRecoverable) return SubmitOutcome.queued;
     return SubmitOutcome.rejected;
   }
 
@@ -237,10 +326,17 @@ class FakeNativeSdk {
     if (isTerminated) return;
     disk.terminatedReason = reason.rawValue;
     disk.terminatedAtMillis = _clock().millisecondsSinceEpoch;
+    // Decision 9 point 6: drop the queue atomically, on disk, in the
+    // same step as the marker — including the crash store, which is
+    // queue state too. Everything in there was addressed to a project
+    // that no longer accepts it; there is no other project it could be
+    // delivered to.
     queue.clear();
+    disk.pendingCrashes.clear();
     shakeEnabled = false;
     longPressEnabled = false;
     floatingButtonEnabled = false;
+    crashHandlerInstalled = false;
     events.add(reason);
   }
 
@@ -308,10 +404,18 @@ void main() {
   }
 
   /// Kills the process and starts a new one: fresh native SDK, fresh
-  /// bridge, same disk.
-  Future<void> restart({String apiKey = 'it_test_key'}) async {
+  /// bridge, same disk. [configError] / [crashUploadError] are what the
+  /// server answers this launch's two background calls with.
+  Future<void> restart({
+    String apiKey = 'it_test_key',
+    CallableError? configError,
+    CallableError? crashUploadError,
+  }) async {
     await native.dispose();
-    native = FakeNativeSdk(disk);
+    native =
+        FakeNativeSdk(disk)
+          ..nextConfigError = configError
+          ..nextCrashUploadError = crashUploadError;
     await boot(apiKey: apiKey);
   }
 
@@ -660,6 +764,179 @@ void main() {
       native.submit('after-2', error: transientFailure);
 
       expect(native.queue, isEmpty);
+    });
+
+    test('a queued report survives a restart while the SDK is alive', () async {
+      // The purge is a TERMINATED-only action. A report queued behind a
+      // transient failure is still deliverable to a project that is
+      // still there, so dropping it would lose a report for nothing —
+      // the SUSPENDED half of Decision 9 point 6.
+      expect(
+        native.submit('queued-1', error: transientFailure),
+        SubmitOutcome.queued,
+      );
+
+      await restart();
+
+      expect(native.isTerminated, isFalse);
+      expect(native.queue, equals(<String>['queued-1']));
+    });
+  });
+
+  group('background paths respect TERMINATED (ITD-164)', () {
+    test('a healthy install still refreshes config and drains crashes', () {
+      // The guard is on TERMINATED, not on everything. If this test
+      // fails, the fix for ITD-164 broke the legitimate path: a live
+      // SDK must fetch its config on launch and must upload the crash
+      // it recorded last run.
+      expect(native.configFetches, 1, reason: 'setUp booted one process');
+      expect(native.crashHandlerInstalled, isTrue);
+    });
+
+    test(
+      'a crash recorded before a restart is uploaded on the next launch',
+      () async {
+        native.recordCrash('crash-1');
+        expect(disk.pendingCrashes, hasLength(1));
+
+        await restart();
+
+        expect(native.crashUploads, 1);
+        expect(native.configFetches, 1);
+        expect(disk.pendingCrashes, isEmpty, reason: 'delivered, then cleared');
+        expect(native.isTerminated, isFalse);
+      },
+    );
+
+    test('a terminated install never fetches config again', () async {
+      native.submit('report', error: projectDeleted);
+      await _pump();
+
+      for (var launch = 1; launch <= 10; launch++) {
+        await restart();
+        expect(
+          native.configFetches,
+          0,
+          reason: 'launch $launch still POSTed getSdkConfig',
+        );
+        expect(
+          native.serverCalls,
+          0,
+          reason: 'launch $launch reached the network at all',
+        );
+      }
+    });
+
+    test(
+      'a terminated install never uploads a crash, and the store stays purged',
+      () async {
+        native.recordCrash('crash-before');
+        expect(disk.pendingCrashes, hasLength(1));
+
+        native.submit('report', error: apiKeyRevoked);
+        await _pump();
+
+        // Purged with the queue, in the same step as the marker.
+        expect(disk.pendingCrashes, isEmpty);
+
+        // The crash handler is uninstalled, so nothing repopulates it...
+        native.recordCrash('crash-after');
+        expect(disk.pendingCrashes, isEmpty);
+
+        // ...and no later launch re-attempts delivery.
+        await restart();
+        expect(native.crashUploads, 0);
+        expect(native.crashHandlerInstalled, isFalse);
+        expect(disk.pendingCrashes, isEmpty);
+
+        // Belt and braces: a crash file that survived the purge — one
+        // written by an older SDK version before the app upgraded, say
+        // — must still not be uploaded. The purge and the launch-time
+        // guard are two independent halves of Decision 9 point 6, and
+        // an install that only has one of them still POSTs to a dead
+        // project.
+        disk.pendingCrashes.add('crash-from-an-older-build');
+        await restart();
+        expect(native.crashUploads, 0);
+        expect(native.serverCalls, 0);
+      },
+    );
+
+    test(
+      'a terminal answer on the crash upload terminates, it is not swallowed',
+      () async {
+        native.recordCrash('crash-1');
+        expect(
+          native.submit('queued-1', error: transientFailure),
+          SubmitOutcome.queued,
+        );
+
+        // Next launch: the crash upload is the first thing that talks to
+        // the server, and the project is gone. Nobody is watching.
+        await restart(crashUploadError: projectDeleted);
+        await _pump();
+
+        expect(native.isTerminated, isTrue);
+        expect(native.terminatedReason, SdkErrorReason.projectDeleted);
+        expect(
+          hostCallbacks,
+          equals(<SdkErrorReason>[SdkErrorReason.projectDeleted]),
+          reason: 'the host learns about it from the background path too',
+        );
+        expect(native.queue, isEmpty);
+        expect(disk.pendingCrashes, isEmpty);
+        expect(native.anyTriggerEnabled, isFalse);
+        expect(native.crashHandlerInstalled, isFalse);
+      },
+    );
+
+    test('a recoverable answer on the crash upload keeps the crash', () async {
+      native.recordCrash('crash-1');
+
+      await restart(crashUploadError: transientFailure);
+      await _pump();
+
+      expect(native.isTerminated, isFalse);
+      expect(
+        disk.pendingCrashes,
+        equals(<String>['crash-1']),
+        reason: 'a transient failure must not lose the crash',
+      );
+      expect(native.anyTriggerEnabled, isTrue);
+      expect(hostCallbacks, isEmpty);
+    });
+
+    test('a terminal answer on the launch config refresh terminates', () async {
+      native.recordCrash('crash-1');
+
+      await restart(configError: workspaceSuspended);
+      await _pump();
+
+      expect(native.isTerminated, isTrue);
+      expect(
+        hostCallbacks,
+        equals(<SdkErrorReason>[SdkErrorReason.workspaceSuspended]),
+      );
+      expect(native.anyTriggerEnabled, isFalse);
+      expect(
+        native.crashUploads,
+        0,
+        reason: 'the crash drain must not run once the refresh terminated it',
+      );
+      expect(disk.pendingCrashes, isEmpty);
+    });
+
+    test('tester gating on a background path changes no state', () async {
+      // ITD-163 on the background paths: a non-recoverable-but-non-
+      // terminal answer must leave a live SDK live. Dispatching on
+      // `!recoverable` here would kill the install permanently.
+      await restart(configError: testerAttestationRequired);
+      await _pump();
+
+      expect(native.isTerminated, isFalse);
+      expect(native.anyTriggerEnabled, isTrue);
+      expect(native.crashHandlerInstalled, isTrue);
+      expect(hostCallbacks, isEmpty);
     });
   });
 }
